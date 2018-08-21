@@ -41,6 +41,26 @@ sub check {
     return $res;
 }
 
+sub run {
+    my ( $self, %params ) = @_;
+    my $rabbit_mq = $params{rabbit_mq};
+
+    my $data;
+    {
+        local $@;
+        $data
+            = eval { local $SIG{__DIE__}; $rabbit_mq->get_server_properties };
+
+        if ( my $e = $@ ) {
+            my $file = quotemeta __FILE__;
+            $e =~ s/ at $file line \d+\.?\n\Z//ms;
+            return { status => 'CRITICAL', info => $e };
+        }
+    }
+
+    return { status => 'OK', data => $data };
+}
+
 1;
 __END__
 
