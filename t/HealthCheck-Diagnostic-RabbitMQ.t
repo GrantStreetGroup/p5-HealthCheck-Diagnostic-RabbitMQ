@@ -133,7 +133,8 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
 {
     my @args;
     no warnings 'once';
-    local *My::RabbitMQ::queue_declare = sub { @args = @_; 'fake.queue' };
+    local *My::RabbitMQ::queue_declare
+        = sub { @args = @_; 'fake.queue', 100, 3 };
     use warnings 'once';
 
     is_deeply(
@@ -144,9 +145,11 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
         {   label  => 'rabbit_mq',
             status => 'OK',
             data   => {
-                queue   => 'a.queue',
-                channel => 1,
-                name    => 'fake.queue',
+                queue     => 'a.queue',
+                channel   => 1,
+                name      => 'fake.queue',
+                messages  => 100,
+                listeners => 3,
             },
         },
         "OK status as expected"
@@ -160,13 +163,32 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
             rabbit_mq => $rabbit_mq,
             queue     => 'a.queue',
             channel   => 123,
+
+            listeners_min_critical => 0,
+            listeners_min_warning  => 1,
+            listeners_max_critical => 4,
+            listeners_max_warning  => 4,    # noop, matches critical
+
+            messages_critical => 10_000,
+            messages_warning  => 1_000,
             )->check,
         {   label  => 'rabbit_mq',
             status => 'OK',
             data   => {
                 queue   => 'a.queue',
                 channel => 123,
-                name    => 'fake.queue',
+
+                listeners_min_critical => 0,
+                listeners_min_warning  => 1,
+                listeners_max_critical => 4,
+                listeners_max_warning  => 4,
+
+                messages_critical => 10_000,
+                messages_warning  => 1_000,
+
+                name      => 'fake.queue',
+                messages  => 100,
+                listeners => 3,
             },
         },
         "OK status as expected"
@@ -182,9 +204,11 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
         ),
         {   status => 'OK',
             data   => {
-                queue   => 'a.queue',
-                channel => 1,
-                name    => 'fake.queue'
+                queue     => 'a.queue',
+                channel   => 1,
+                name      => 'fake.queue',
+                messages  => 100,
+                listeners => 3,
             }
         },
         "OK status as expected with rabbit_mq object passed to check()"
@@ -201,9 +225,11 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
         ),
         {   status => 'OK',
             data   => {
-                queue   => 'a.queue',
-                channel => 321,
-                name    => 'fake.queue',
+                queue     => 'a.queue',
+                channel   => 321,
+                name      => 'fake.queue',
+                messages  => 100,
+                listeners => 3,
             }
         },
         "OK status as expected with rabbit_mq object passed to check()"
@@ -218,19 +244,47 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
             queue     => 'ignored.queue',
             channel   => 'ignored channel',
             copied    => 'copied.value',
-        )->check(
+
+            listeners_min_critical => 5,
+            listeners_min_warning  => 6,
+            listeners_max_critical => 2,
+            listeners_max_warning  => 1,
+
+            messages_critical => 10_000,
+            messages_warning  => 1_000,
+            )->check(
             label     => 'ignored_label',
             rabbit_mq => $rabbit_mq->(),
             queue     => 'a.queue',
             channel   => 321,
-            copied    => 'passed to check',
-        ),
-        {   label => 'rabbit_mq',
-            status  => 'OK',
-            data => {
-                queue   => 'a.queue',
-                channel => 321,
-                name    => 'fake.queue',
+
+            listeners_min_critical => 0,
+            listeners_min_warning  => 1,
+            listeners_max_critical => 4,
+            listeners_max_warning  => 4,    # noop, matches critical
+
+            messages_critical => 10_000,
+            messages_warning  => 1_000,
+
+            copied => 'passed to check',
+            ),
+        {   label  => 'rabbit_mq',
+            status => 'OK',
+            data   => {
+                queue                  => 'a.queue',
+                channel                => 321,
+
+                listeners_min_critical => 0,
+                listeners_min_warning  => 1,
+                listeners_max_critical => 4,
+                listeners_max_warning  => 4,
+
+                messages_critical => 10_000,
+                messages_warning  => 1_000,
+
+                name      => 'fake.queue',
+                messages  => 100,
+                listeners => 3,
             },
         },
         "Copied somewhat expected params to result"
@@ -238,6 +292,73 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
     isa_ok shift(@args), 'My::RabbitMQ';
     is_deeply \@args, [ 321, 'a.queue', { passive => 1 } ],
         "Class passed expected args to queue_declare with custom channel";
+
+
+    foreach my $limit (qw(
+        listeners_min_critical
+        listeners_min_warning
+        listeners_max_critical
+        listeners_max_warning
+
+        messages_critical
+        messages_warning
+    )) {
+        my $status = $limit =~ /critical/  ? 'CRITICAL'  : 'WARNING';
+        my $value  = $limit =~ /min/       ? 50          : 2;
+        my $info   = $limit =~ /listeners/ ? 'Listeners' : 'Messages';
+
+        is_deeply(
+            HealthCheck::Diagnostic::RabbitMQ->check(
+                rabbit_mq => $rabbit_mq->(),
+                queue     => 'a.queue',
+                $limit    => $value,
+            ),
+            {   status => $status,
+                info   => "$info out of range!",
+                data   => {
+                    queue   => 'a.queue',
+                    channel => 1,
+                    $limit  => $value,
+
+                    name      => 'fake.queue',
+                    messages  => 100,
+                    listeners => 3,
+                },
+            },
+            "[$limit] caused expected status"
+        );
+    }
+
+
+    foreach my $limits (
+        { listeners_min_critical => 5, listeners_min_warning => 4 },
+        { listeners_max_critical => 2, listeners_max_warning => 1 },
+        { messages_critical => 50, messages_warning => 25 },
+    ) {
+        my ($limit) = keys %{$limits};
+        $limit =~ s/_[^_]+$//;
+        my $info = $limit =~ /listeners/ ? 'Listeners' : 'Messages';
+        is_deeply(
+            HealthCheck::Diagnostic::RabbitMQ->check(
+                rabbit_mq => $rabbit_mq->(),
+                queue     => 'a.queue',
+                %{ $limits },
+            ),
+            {   status => 'CRITICAL',
+                info   => "$info out of range!",
+                data   => {
+                    queue   => 'a.queue',
+                    channel => 1,
+                    %{ $limits },
+
+                    name      => 'fake.queue',
+                    messages  => 100,
+                    listeners => 3,
+                },
+            },
+            "[$limit] critical overides warning"
+        );
+    }
 }
 
 done_testing;

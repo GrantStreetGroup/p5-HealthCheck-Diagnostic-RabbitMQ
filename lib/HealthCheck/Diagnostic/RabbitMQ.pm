@@ -33,6 +33,16 @@ sub check {
     # and that we're going to return in the result to make that clear.
     my %decision_params = ( rabbit_mq => undef );
 
+    my @limits = qw(
+        listeners_min_critical
+        listeners_min_warning
+        listeners_max_critical
+        listeners_max_warning
+
+        messages_critical
+        messages_warning
+    );
+
     # If we have a queue to check, that changes our requirements
     if ( defined $params{queue}
         or ( ref $self and defined $self->{queue} ) )
@@ -41,15 +51,20 @@ sub check {
         $decision_params{$_} = undef for qw(
             queue
             channel
-        );
+        ), @limits;
     }
 
     # Now we prefer the params passed to check,
     # and fall back to what is on the instance.
     foreach my $param ( keys %decision_params ) {
-        $decision_params{$param} = $params{$param};
-        $decision_params{$param} ||= $self->{$param} if ref $self;
+        $decision_params{$param}
+            = exists $params{$param} ? $params{$param}
+            : ref $self              ? $self->{$param}
+            :                          undef;
     }
+
+    # No need to return the limits we aren't using in the result
+    delete @decision_params{ grep { !defined $decision_params{$_} } @limits };
 
     # The rabbit_mq param was only "known" so we could choose between
     # one that was passed to check and the one on the instance.
@@ -94,10 +109,15 @@ sub run {
         my $channel = $params{channel};
 
         $cb = sub {
-            my $name = $rabbit_mq->queue_declare( $channel, $queue,
+            my ( $name, $messages, $listeners )
+                = $rabbit_mq->queue_declare( $channel, $queue,
                 { passive => 1 } );
 
-            return { name => $name };
+            return {
+                name      => $name,
+                messages  => $messages,
+                listeners => $listeners,
+            };
         };
     }
 
@@ -114,7 +134,50 @@ sub run {
         }
     }
 
-    return { status => 'OK', data => $data };
+    my %res = ( status => 'OK', data => $data );
+
+    if ( defined $data->{listeners} ) {
+        my $listeners = $data->{listeners};
+        if ((   defined $params{listeners_max_critical}
+                and $params{listeners_max_critical} <= $listeners
+            )
+            or ( defined $params{listeners_min_critical}
+                and $params{listeners_min_critical} >= $listeners )
+            )
+        {
+            $res{status} = 'CRITICAL';
+            $res{info} = "Listeners out of range!";
+        }
+        elsif (
+            (   defined $params{listeners_max_warning}
+                and $params{listeners_max_warning} <= $listeners
+            )
+            or ( defined $params{listeners_min_warning}
+                and $params{listeners_min_warning} >= $listeners )
+            )
+        {
+            $res{status} = 'WARNING';
+            $res{info} = "Listeners out of range!";
+        }
+    }
+
+    if ( $res{status} ne 'CRITICAL' and defined $data->{messages} ) {
+        my $messages = $data->{messages};
+        if ( defined $params{messages_critical}
+            and $params{messages_critical} <= $messages )
+        {
+            $res{status} = 'CRITICAL';
+            $res{info} = "Messages out of range!";
+        }
+        elsif ( defined $params{messages_warning}
+            and $params{messages_warning} <= $messages )
+        {
+            $res{status} = 'WARNING';
+            $res{info} = "Messages out of range!";
+        }
+    }
+
+    return \%res;
 }
 
 1;
@@ -136,6 +199,15 @@ and not too many queued messages waiting.
         rabbit_mq => \&connect_mq,
         queue     => $queue_name,
         channel   => $channel,       # default channel is 1
+
+        # All the rest are optional and only work on queue.
+        listeners_min_critical => 0,
+        listeners_min_warning  => 1,
+        listeners_max_critical => 3,
+        listeners_max_warning  => 3,    # noop, matches critical
+
+        messages_critical => 10_000,
+        messages_warning  => 1_000,
     );
 
     my $health_check = HealthCheck->new( checks => [$check_rabbit_mq] );
@@ -172,7 +244,10 @@ Sets the C<status> to "OK" or "CRITICAL" based on the
 return value from C<< rabbit_mq->get_server_properties >>.
 
 If you pass in a L</queue>,
-it will instead check that the queue exists.
+it will instead check that the queue exists
+and if you additionally provide L</listeners> or L</messages>
+will also verify those limits.
+Limits are ignored without a queue.
 
 =head1 ATTRIBUTES
 
@@ -200,6 +275,51 @@ The passed in L</rabbit_mq> must open this channel with C<channel_open>
 to use this method.
 
 Defaults to 1.
+
+=head2 Limits
+
+=head3 listeners
+
+With these set, checks to see that the number of listeners on
+the L</queue> is within the exclusive range.
+
+Checked in the order listed here:
+
+=over
+
+=item listeners_min_critical
+
+Check is C<CRITICAL> if the number of listeners is this many or less.
+
+=item listeners_max_critical
+
+Check is C<CRITICAL> if the number of listeners is this many or more.
+
+=item listeners_min_warning
+
+Check is C<WARNING> if the number of listeners is this many or less.
+
+=item listeners_max_warning
+
+Check is C<WARNING> if the number of listeners is this many or more.
+
+=back
+
+=head3 messages
+
+Thresholds for number of messages in the queue.
+
+=over
+
+=item messages_critical
+
+Check is C<CRITICAL> if the number of messages is this many or more.
+
+=item messages_warning
+
+Check is C<WARNING> if the number of messages is this many or more.
+
+=back
 
 =head1 BUGS AND LIMITATIONS
 
