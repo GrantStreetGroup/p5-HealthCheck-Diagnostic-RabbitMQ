@@ -67,6 +67,16 @@ my $rabbit_mq = sub { My::RabbitMQ->new };
         { 'status' => 'OK', 'data' => { 'fake' => 'properties' } },
         "OK status as expected with rabbit_mq object passed to check()"
     );
+
+    is_deeply(
+        HealthCheck::Diagnostic::RabbitMQ->new(rabbit_mq => sub { die "oops\n" })
+            ->check,
+        {   label => 'rabbit_mq',
+            status => 'CRITICAL',
+            info   => "oops\n",
+        },
+        "CRITICAL + label for bad rabbitmq"
+    );
 }
 
 {

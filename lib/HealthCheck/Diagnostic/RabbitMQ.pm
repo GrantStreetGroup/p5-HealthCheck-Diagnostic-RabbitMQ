@@ -69,7 +69,13 @@ sub check {
     # The rabbit_mq param was only "known" so we could choose between
     # one that was passed to check and the one on the instance.
     my $rabbit_mq = delete $decision_params{rabbit_mq};
-    $rabbit_mq = $rabbit_mq->(%params) if ref $rabbit_mq eq 'CODE';
+    if (ref $rabbit_mq eq 'CODE') {
+        local $@;
+        $rabbit_mq = eval { local $SIG{__DIE__}; $rabbit_mq->(%params) };
+        if ($@) {
+            return $self->summarize({ status => 'CRITICAL', info => $@ })
+        }
+    }
 
     croak("'rabbit_mq' must have '$method' method") unless $rabbit_mq and do {
         local $@; eval { local $SIG{__DIE__}; $rabbit_mq->can($method) } };
