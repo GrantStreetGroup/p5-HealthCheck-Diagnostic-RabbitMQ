@@ -19,3 +19,4 @@ cpanfile.snapshot
 local/
 HealthCheck-Diagnostic-RabbitMQ-v*/
 HealthCheck-Diagnostic-RabbitMQ-v*.tar.*
+*.bak
