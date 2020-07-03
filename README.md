@@ -4,7 +4,7 @@ HealthCheck::Diagnostic::RabbitMQ - Check connectivity and queues on a RabbitMQ 
 
 # VERSION
 
-version v1.1.4
+version v1.1.6
 
 # SYNOPSIS
 
@@ -80,6 +80,19 @@ Can be passed either to `new` or `check`.
 A coderef that returns a
 [Net::AMQP::RabbitMQ](https://metacpan.org/pod/Net%3A%3AAMQP%3A%3ARabbitMQ) or [Net::RabbitMQ](https://metacpan.org/pod/Net%3A%3ARabbitMQ) or compatible object,
 or the object itself.
+
+If using a coderef, the first returned value should always be the
+RabbitMQ object.  If more than one value is returned, the second is
+assumed to be a Boolean ["should\_disconnect"](#should_disconnect) flag (see below).
+
+## should\_disconnect
+
+An optional Boolean value specifying whether to call `->disconnect`
+on the RabbitMQ object after doing the health check.  The default is
+false.
+
+If specified as a parameter, it will override any value that might
+be returned by a ["rabbit\_mq"](#rabbit_mq) coderef as described above.
 
 ## queue
 
