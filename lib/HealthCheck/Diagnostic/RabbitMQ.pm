@@ -201,13 +201,21 @@ sub run {
             and $params{messages_critical} <= $messages )
         {
             $res{status} = 'CRITICAL';
-            $res{info} = "Messages out of range! Expected max: $params{messages_critical} have: $messages";
+            $res{info} = sprintf(
+                "Messages out of range! Expected max: %d have: %d",
+                $params{messages_critical},
+                $messages,
+            );
         }
         elsif ( defined $params{messages_warning}
             and $params{messages_warning} <= $messages )
         {
             $res{status} = 'WARNING';
-            $res{info} = "Messages out of range! Expected max: $params{messages_warning} have: $messages";
+            $res{info} = sprintf(
+                "Messages out of range! Expected max: %d have: %d",
+                $params{messages_warning},
+                $messages,
+            );
         }
     }
 
