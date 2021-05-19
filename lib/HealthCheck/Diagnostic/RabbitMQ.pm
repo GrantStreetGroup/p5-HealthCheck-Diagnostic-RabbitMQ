@@ -169,8 +169,13 @@ sub run {
                 and $params{listeners_min_critical} >= $listeners )
             )
         {
+            my $min = $params{listeners_min_critical};
+            my $max = $params{listeners_max_critical};
             $res{status} = 'CRITICAL';
-            $res{info} = "Listeners out of range!";
+            my $info = "Listeners out of range! Expected";
+            $info .= " min: $min" if defined $min;
+            $info .= " max: $max" if defined $max;
+            $res{info} = "$info have: $listeners";
         }
         elsif (
             (   defined $params{listeners_max_warning}
@@ -180,8 +185,13 @@ sub run {
                 and $params{listeners_min_warning} >= $listeners )
             )
         {
+            my $min = $params{listeners_min_warning};
+            my $max = $params{listeners_max_warning};
             $res{status} = 'WARNING';
-            $res{info} = "Listeners out of range!";
+            my $info = "Listeners out of range! Expected";
+            $info .= " min: $min" if defined $min;
+            $info .= " max: $max" if defined $max;
+            $res{info} = "$info have: $listeners";
         }
     }
 
@@ -191,13 +201,21 @@ sub run {
             and $params{messages_critical} <= $messages )
         {
             $res{status} = 'CRITICAL';
-            $res{info} = "Messages out of range!";
+            $res{info} = sprintf(
+                "Messages out of range! Expected max: %d have: %d",
+                $params{messages_critical},
+                $messages,
+            );
         }
         elsif ( defined $params{messages_warning}
             and $params{messages_warning} <= $messages )
         {
             $res{status} = 'WARNING';
-            $res{info} = "Messages out of range!";
+            $res{info} = sprintf(
+                "Messages out of range! Expected max: %d have: %d",
+                $params{messages_warning},
+                $messages,
+            );
         }
     }
 
