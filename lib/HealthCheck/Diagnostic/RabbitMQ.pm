@@ -133,7 +133,16 @@ sub run {
                 = $rabbit_mq->queue_declare( $channel, $queue,
                 { passive => 1 } );
 
+            my $server_properties;
+            if ($rabbit_mq->can("get_server_properties")) {
+                $server_properties = $rabbit_mq->get_server_properties;
+            }
+
             return {
+                (   $server_properties
+                    ? (server_properties => $server_properties)
+                    : ()
+                ),
                 name      => $name,
                 messages  => $messages,
                 listeners => $listeners,
