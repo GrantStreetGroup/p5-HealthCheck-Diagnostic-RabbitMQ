@@ -4,7 +4,7 @@ HealthCheck::Diagnostic::RabbitMQ - Check connectivity and queues on a RabbitMQ 
 
 # VERSION
 
-version v1.2.0
+version v1.3.0
 
 # SYNOPSIS
 
@@ -168,7 +168,7 @@ Grant Street Group <developers@grantstreet.com>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2018 - 2022 by Grant Street Group.
+This software is Copyright (c) 2018 - 2023 by Grant Street Group.
 
 This is free software, licensed under:
 
