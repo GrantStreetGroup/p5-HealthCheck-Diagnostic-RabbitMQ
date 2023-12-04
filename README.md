@@ -4,7 +4,7 @@ HealthCheck::Diagnostic::RabbitMQ - Check connectivity and queues on a RabbitMQ 
 
 # VERSION
 
-version v1.3.0
+version v1.3.1
 
 # SYNOPSIS
 
